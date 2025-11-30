@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dark Video Player</title>
+  <style>
+    :root{
+      --bg:#0b0d10;
+      --panel:#0f1114;
+      --muted:#9aa3ad;
+      --accent:#7c9cff;
+      --glass: rgba(255,255,255,0.03);
+      --radius:12px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;color:#e6eef8;background:linear-gradient(180deg,var(--bg),#060607);}
+
+    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px}
+
+    .card{width:100%;max-width:1100px;background:linear-gradient(180deg,var(--panel),#0b0d10);border-radius:var(--radius);padding:20px;box-shadow:0 10px 30px rgba(3,6,10,0.6);}
+
+    header{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+    .logo{width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#5e7dff);display:flex;align-items:center;justify-content:center;color:#071225;font-weight:700}
+    h1{font-size:18px;margin:0}
+    p.lead{margin:0;color:var(--muted);font-size:13px}
+
+    .player-wrap{display:grid;grid-template-columns:1fr 320px;gap:18px}
+    @media (max-width:900px){.player-wrap{grid-template-columns:1fr}}
+
+    .video-panel{background:var(--glass);border-radius:10px;padding:12px;display:flex;flex-direction:column;align-items:center}
+    video{width:100%;height:auto;border-radius:8px;background:#000;display:block}
+
+    .controls{width:100%;display:flex;align-items:center;gap:8px;margin-top:10px}
+    .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:8px;color:var(--muted);cursor:pointer}
+    .btn:hover{border-color:rgba(124,156,255,0.22);color:var(--accent)}
+
+    .slider{flex:1;-webkit-appearance:none;height:6px;background:rgba(255,255,255,0.04);border-radius:6px}
+    .slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);box-shadow:0 2px 6px rgba(124,156,255,0.12)}
+
+    aside{padding:12px;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border:1px solid rgba(255,255,255,0.03)}
+    .meta{font-size:13px;color:var(--muted);margin-bottom:12px}
+
+    .file-area{display:flex;flex-direction:column;gap:8px}
+    .drop{border:2px dashed rgba(255,255,255,0.03);padding:12px;border-radius:8px;text-align:center;color:var(--muted);font-size:13px}
+    .drop.drag{border-color:rgba(124,156,255,0.28);background:rgba(124,156,255,0.02);color:var(--accent)}
+
+    .row{display:flex;gap:8px}
+    .small{font-size:13px;color:var(--muted)}
+    footer{margin-top:12px;text-align:center;color:var(--muted);font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <header>
+        <div class="logo">DV</div>
+        <div>
+          <h1>Dark Video Player</h1>
+          <p class="lead">Drop a file, choose a local MP4 (e.g. <code>recording.mp4</code>) or use the input below. Plays video + audio.</p>
+        </div>
+      </header>
+
+      <div class="player-wrap">
+        <div class="video-panel">
+          <video id="player" controls preload="metadata">
+            <source id="source" src="recording.mp4" type="video/mp4">
+            Your browser does not support HTML5 video.
+          </video>
+
+          <div class="controls">
+            <button id="playbtn" class="btn">Play/Pause</button>
+            <button id="fsbtn" class="btn">Fullscreen</button>
+            <input id="seek" class="slider" type="range" min="0" max="100" value="0">
+            <input id="vol" type="range" min="0" max="1" step="0.01" value="1" style="width:110px">
+          </div>
+          <div style="width:100%;display:flex;justify-content:space-between;margin-top:8px;color:var(--muted);font-size:13px">
+            <div id="time">00:00 / 00:00</div>
+            <div id="status">Loaded: <span id="filename">monitor.mp4</span></div>
+          </div>
+        </div>
+
+        <aside>
+          <div class="meta">File controls — keep the player page and the file in the same folder for quick demo. Drag & drop supported.</div>
+
+          <div class="file-area">
+            <label class="drop" id="drop">Drop video here or click to choose</label>
+            <input id="file" type="file" accept="video/*" style="display:none">
+
+            <div class="row">
+              <button id="openLocal" class="btn">Open local file</button>
+              <button id="reload" class="btn">Reload source</button>
+            </div>
+            <div class="small">Keyboard: Space = play/pause, ←/→ = -/+10s, F = fullscreen</div>
+          </div>
+
+          <footer>Made for Arch + Hyprland — dark theme.</footer>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const player = document.getElementById('player');
+    const playbtn = document.getElementById('playbtn');
+    const fsbtn = document.getElementById('fsbtn');
+    const seek = document.getElementById('seek');
+    const vol = document.getElementById('vol');
+    const time = document.getElementById('time');
+    const drop = document.getElementById('drop');
+    const fileInput = document.getElementById('file');
+    const openLocal = document.getElementById('openLocal');
+    const reload = document.getElementById('reload');
+    const filenameEl = document.getElementById('filename');
+
+    function format(s){
+      if(!isFinite(s)) return '00:00';
+      const m = Math.floor(s/60).toString().padStart(2,'0');
+      const sec = Math.floor(s%60).toString().padStart(2,'0');
+      return `${m}:${sec}`;
+    }
+
+    player.addEventListener('loadedmetadata', ()=>{
+      seek.max = Math.floor(player.duration);
+      time.textContent = `00:00 / ${format(player.duration)}`;
+    });
+
+    player.addEventListener('timeupdate', ()=>{
+      seek.value = Math.floor(player.currentTime);
+      time.textContent = `${format(player.currentTime)} / ${format(player.duration)}`;
+    });
+
+    playbtn.addEventListener('click', ()=>{
+      if(player.paused) player.play(); else player.pause();
+    });
+
+    fsbtn.addEventListener('click', ()=>{
+      if(document.fullscreenElement) document.exitFullscreen(); else player.requestFullscreen();
+    });
+
+    seek.addEventListener('input', ()=>{ player.currentTime = seek.value; });
+    vol.addEventListener('input', ()=>{ player.volume = vol.value; });
+
+    // drag & drop
+    ['dragenter','dragover'].forEach(ev=>{
+      drop.addEventListener(ev,(e)=>{e.preventDefault();e.stopPropagation();drop.classList.add('drag');});
+    });
+    ['dragleave','drop'].forEach(ev=>{
+      drop.addEventListener(ev,(e)=>{e.preventDefault();e.stopPropagation();drop.classList.remove('drag');});
+    });
+    drop.addEventListener('click', ()=>fileInput.click());
+
+    drop.addEventListener('drop',(e)=>{
+      const f = e.dataTransfer.files[0];
+      if(!f) return;
+      loadFile(f);
+    });
+
+    fileInput.addEventListener('change',()=>{
+      const f = fileInput.files[0]; if(!f) return; loadFile(f);
+    });
+
+    openLocal.addEventListener('click', ()=> fileInput.click());
+    reload.addEventListener('click', ()=>{
+      const src = document.getElementById('source').src;
+      player.src = src; player.load(); player.play().catch(()=>{});
+    });
+
+    function loadFile(file){
+      const url = URL.createObjectURL(file);
+      player.src = url;
+      player.load();
+      filenameEl.textContent = file.name;
+      player.play().catch(()=>{});
+    }
+
+    // keyboard shortcuts
+    window.addEventListener('keydown',(e)=>{
+      if(e.target.tagName === 'INPUT') return;
+      if(e.code === 'Space'){ e.preventDefault(); if(player.paused) player.play(); else player.pause(); }
+      if(e.key === 'f' || e.key === 'F') { if(document.fullscreenElement) document.exitFullscreen(); else player.requestFullscreen(); }
+      if(e.key === 'ArrowRight'){ player.currentTime = Math.min(player.duration, player.currentTime + 10); }
+      if(e.key === 'ArrowLeft'){ player.currentTime = Math.max(0, player.currentTime - 10); }
+    });
+  </script>
+</body>
+</html>
